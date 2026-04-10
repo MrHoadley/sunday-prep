@@ -45,7 +45,8 @@ export default async function handler(
       return res.status(400).json({ error: 'File too large. Maximum 10MB.' });
     }
 
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey, {
+    // Updated API endpoint - using gemini-1.5-flash (stable model)
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -61,46 +62,62 @@ export default async function handler(
                 }
               },
               {
-                text: `Extract the meal plan, calorie targets, and ingredients from this document. 
-                Return the data in a structured JSON format matching this schema:
-                {
-                  "calorieTarget": number,
-                  "meals": [
-                    { "day": string, "breakfast": string, "lunch": string, "dinner": string, "snacks": string }
-                  ],
-                  "ingredients": [
-                    { "name": string, "requiredAmount": number, "unit": "g" | "kg" | "ml" | "l" | "pcs" | "cups" | "tbsp" | "tsp" }
-                  ]
-                }
-                If a field is missing, provide a reasonable default or leave it empty. 
-                Ensure all ingredients have a name, amount, and unit.`
+                text: `You are a meal planning assistant. Extract the meal plan, calorie targets, and ingredients from this document. 
+
+Return ONLY valid JSON (no markdown formatting, no code blocks) in exactly this structure:
+{
+  "calorieTarget": 2100,
+  "meals": [
+    { "day": "Monday", "breakfast": "...", "lunch": "...", "dinner": "...", "snacks": "..." }
+  ],
+  "ingredients": [
+    { "name": "Chicken breast", "requiredAmount": 1000, "unit": "g" }
+  ]
+}
+
+Rules:
+- calorieTarget should be a number (if not found, use 2000)
+- Each meal needs: day, breakfast, lunch, dinner, snacks (use "None" if not specified)
+- Each ingredient needs: name (string), requiredAmount (number), unit (one of: g, kg, ml, l, pcs, cups, tbsp, tsp)
+- If you can't find specific ingredients, extract them from the meal descriptions
+- Return valid JSON only, no other text`
               }
             ]
           }
-        ],
-        generationConfig: {
-          response_mime_type: "application/json",
-        }
+        ]
       })
     });
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('Gemini API error:', response.status, errorText);
+      throw new Error(`Gemini API error: ${response.statusText} - ${errorText}`);
     }
 
     const data = await response.json();
-    const text = data.candidates[0]?.content?.parts[0]?.text;
-
-    if (!text) {
+    
+    if (!data.candidates || !data.candidates[0]) {
       throw new Error('No response from Gemini API');
     }
 
-    const parsed = JSON.parse(text);
+    const text = data.candidates[0]?.content?.parts[0]?.text;
+
+    if (!text) {
+      throw new Error('No text in Gemini response');
+    }
+
+    // Clean up any markdown formatting
+    const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    const parsed = JSON.parse(cleanText);
 
     const result: MealPlan = {
-      ...parsed,
-      ingredients: parsed.ingredients.map((ing: any) => ({
-        ...ing,
+      calorieTarget: parsed.calorieTarget || 2000,
+      meals: parsed.meals || [],
+      ingredients: (parsed.ingredients || []).map((ing: any) => ({
+        name: ing.name || 'Unknown',
+        requiredAmount: ing.requiredAmount || 0,
+        unit: ing.unit || 'g',
         id: Math.random().toString(36).substr(2, 9),
         onHand: 0,
         pricePerUnit: 0,
