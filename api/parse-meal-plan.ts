@@ -47,36 +47,33 @@ export default async function handler(
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Try gemini-pro first (most widely available)
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "models/gemini-pro" });
 
-    const result = await model.generateContent([
-      {
-        text: `You are a meal planning assistant. I'm providing you with a document (base64 encoded as ${mimeType}).
+    const result = await model.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [{
+          text: `You are a meal planning assistant. Extract meal plan information from the following document content and return ONLY valid JSON.
 
-Extract the meal plan, calorie targets, and ingredients from this document data:
+Document type: ${mimeType}
 
-${fileBase64.substring(0, 50000)}...
-
-Return ONLY valid JSON (no markdown formatting, no code blocks) in exactly this structure:
+Return this exact structure:
 {
   "calorieTarget": 2100,
   "meals": [
-    { "day": "Monday", "breakfast": "...", "lunch": "...", "dinner": "...", "snacks": "..." }
+    { "day": "Monday", "breakfast": "Eggs", "lunch": "Salad", "dinner": "Chicken", "snacks": "Nuts" }
   ],
   "ingredients": [
-    { "name": "Chicken breast", "requiredAmount": 1000, "unit": "g" }
+    { "name": "Eggs", "requiredAmount": 12, "unit": "pcs" }
   ]
 }
 
-Rules:
-- calorieTarget should be a number (if not found, use 2000)
-- Each meal needs: day, breakfast, lunch, dinner, snacks (use "None" if not specified)
-- Each ingredient needs: name (string), requiredAmount (number), unit (one of: g, kg, ml, l, pcs, cups, tbsp, tsp)
-- If you can't find specific ingredients, extract them from the meal descriptions
-- Return valid JSON only, no other text`
-      }
-    ]);
+Extract from this content (partial): ${fileBase64.substring(0, 30000)}
+
+Return only JSON, no markdown, no code blocks.`
+        }]
+      }]
+    });
 
     const response = await result.response;
     const text = response.text();
@@ -85,9 +82,7 @@ Rules:
       throw new Error('No text in Gemini response');
     }
 
-    // Clean up any markdown formatting
     const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    
     const parsed = JSON.parse(cleanText);
 
     const mealPlan: MealPlan = {
