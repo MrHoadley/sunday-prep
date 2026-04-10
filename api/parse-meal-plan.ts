@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface MealPlan {
   calorieTarget: number;
@@ -45,24 +46,18 @@ export default async function handler(
       return res.status(400).json({ error: 'File too large. Maximum 10MB.' });
     }
 
-    // Use v1 API with correct model name
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          data: fileBase64,
+          mimeType: mimeType,
+        }
       },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: fileBase64,
-                }
-              },
-              {
-                text: `You are a meal planning assistant. Extract the meal plan, calorie targets, and ingredients from this document. 
+      {
+        text: `You are a meal planning assistant. Extract the meal plan, calorie targets, and ingredients from this document. 
 
 Return ONLY valid JSON (no markdown formatting, no code blocks) in exactly this structure:
 {
@@ -81,32 +76,11 @@ Rules:
 - Each ingredient needs: name (string), requiredAmount (number), unit (one of: g, kg, ml, l, pcs, cups, tbsp, tsp)
 - If you can't find specific ingredients, extract them from the meal descriptions
 - Return valid JSON only, no other text`
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 8192,
-        }
-      })
-    });
+      }
+    ]);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Gemini API error:', response.status, errorText);
-      throw new Error(`Gemini API error: ${response.statusText} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    
-    if (!data.candidates || !data.candidates[0]) {
-      throw new Error('No response from Gemini API');
-    }
-
-    const text = data.candidates[0]?.content?.parts[0]?.text;
+    const response = await result.response;
+    const text = response.text();
 
     if (!text) {
       throw new Error('No text in Gemini response');
@@ -117,7 +91,7 @@ Rules:
     
     const parsed = JSON.parse(cleanText);
 
-    const result: MealPlan = {
+    const mealPlan: MealPlan = {
       calorieTarget: parsed.calorieTarget || 2000,
       meals: parsed.meals || [],
       ingredients: (parsed.ingredients || []).map((ing: any) => ({
@@ -130,7 +104,7 @@ Rules:
       })),
     };
 
-    return res.status(200).json(result);
+    return res.status(200).json(mealPlan);
 
   } catch (error) {
     console.error('Error parsing meal plan:', error);
