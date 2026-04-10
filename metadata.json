@@ -1,0 +1,5 @@
+{
+  "name": "Sunday Prep: Meal & Grocery Planner",
+  "description": "A smart meal planning and grocery list app that parses your meal plans from PDF, Word, Excel, or Markdown files to generate a weekly shopping list with price tracking and unit conversion.",
+  "requestFramePermissions": []
+}
