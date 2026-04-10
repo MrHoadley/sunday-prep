@@ -47,17 +47,16 @@ export default async function handler(
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Try gemini-pro first (most widely available)
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     const result = await model.generateContent([
       {
-        inlineData: {
-          data: fileBase64,
-          mimeType: mimeType,
-        }
-      },
-      {
-        text: `You are a meal planning assistant. Extract the meal plan, calorie targets, and ingredients from this document. 
+        text: `You are a meal planning assistant. I'm providing you with a document (base64 encoded as ${mimeType}).
+
+Extract the meal plan, calorie targets, and ingredients from this document data:
+
+${fileBase64.substring(0, 50000)}...
 
 Return ONLY valid JSON (no markdown formatting, no code blocks) in exactly this structure:
 {
