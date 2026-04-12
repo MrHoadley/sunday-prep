@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface MealPlan {
   calorieTarget: number;
@@ -46,40 +45,68 @@ export default async function handler(
       return res.status(400).json({ error: 'File too large. Maximum 10MB.' });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "models/gemini-pro" });
+    // Try the newest API first
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: fileBase64
+              }
+            },
+            {
+              text: `Extract the meal plan, calorie targets, and ingredients from this document. 
 
-    const result = await model.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [{
-          text: `You are a meal planning assistant. Extract meal plan information from the following document content and return ONLY valid JSON.
-
-Document type: ${mimeType}
-
-Return this exact structure:
+Return ONLY valid JSON (no markdown, no code blocks) in this exact structure:
 {
   "calorieTarget": 2100,
   "meals": [
-    { "day": "Monday", "breakfast": "Eggs", "lunch": "Salad", "dinner": "Chicken", "snacks": "Nuts" }
+    { "day": "Monday", "breakfast": "...", "lunch": "...", "dinner": "...", "snacks": "..." }
   ],
   "ingredients": [
-    { "name": "Eggs", "requiredAmount": 12, "unit": "pcs" }
+    { "name": "Chicken breast", "requiredAmount": 1000, "unit": "g" }
   ]
 }
 
-Extract from this content (partial): ${fileBase64.substring(0, 30000)}
-
-Return only JSON, no markdown, no code blocks.`
+Rules:
+- calorieTarget: number (use 2000 if not found)
+- meals: array with day, breakfast, lunch, dinner, snacks
+- ingredients: name, requiredAmount (number), unit (g/kg/ml/l/pcs/cups/tbsp/tsp)
+- Return ONLY JSON, no other text`
+            }
+          ]
         }]
-      }]
+      })
     });
 
-    const response = await result.response;
-    const text = response.text();
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('API Error:', response.status, errorText);
+      
+      // Log the error but return a fallback
+      return res.status(500).json({ 
+        error: 'API unavailable',
+        details: `Status: ${response.status}, ${errorText.substring(0, 200)}`
+      });
+    }
 
+    const data = await response.json();
+    
+    if (!data.candidates || !data.candidates[0]) {
+      throw new Error('No response from API');
+    }
+
+    const text = data.candidates[0]?.content?.parts[0]?.text;
     if (!text) {
-      throw new Error('No text in Gemini response');
+      throw new Error('No text in response');
     }
 
     const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -103,7 +130,7 @@ Return only JSON, no markdown, no code blocks.`
   } catch (error) {
     console.error('Error parsing meal plan:', error);
     return res.status(500).json({ 
-      error: 'Failed to parse meal plan. Please try again.',
+      error: 'Failed to parse meal plan',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
