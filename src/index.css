@@ -30,11 +30,9 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
   body {
-    @apply bg-[#5E5E5E] text-foreground font-sans;
+    background-color: #5E5E5E;
+    color: #2B2B2B;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 }
