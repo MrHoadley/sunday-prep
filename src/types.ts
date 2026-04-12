@@ -1,5 +1,7 @@
 export type Unit = 'g' | 'kg' | 'ml' | 'l' | 'pcs' | 'cups' | 'tbsp' | 'tsp';
 
+export type Category = 'Protein' | 'Grains' | 'Vegetables' | 'Fruits' | 'Dairy' | 'Fats' | 'Pantry' | 'Other';
+
 export interface Ingredient {
   id: string;
   name: string;
@@ -7,6 +9,8 @@ export interface Ingredient {
   unit: Unit;
   onHand: number;
   pricePerUnit: number;
+  category?: Category;
+  source?: string;
 }
 
 export interface DailyMeals {
