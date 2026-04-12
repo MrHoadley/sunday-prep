@@ -45,8 +45,8 @@ export default async function handler(
       return res.status(400).json({ error: 'File too large. Maximum 10MB.' });
     }
 
-    // Use v1 API with gemini-2.0-flash (current stable model)
-    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    // Use v1 API with gemini-3-flash-preview (cheaper and faster)
+    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
     
     const response = await fetch(apiUrl, {
       method: 'POST',
