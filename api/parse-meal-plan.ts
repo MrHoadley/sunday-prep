@@ -45,8 +45,8 @@ export default async function handler(
       return res.status(400).json({ error: 'File too large. Maximum 10MB.' });
     }
 
-    // Use gemini-1.5-flash-001 which is the stable version
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${apiKey}`;
+    // Use v1 API with gemini-2.0-flash (current stable model)
+    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -93,7 +93,7 @@ Rules:
       
       return res.status(500).json({ 
         error: 'API unavailable',
-        details: `Status: ${response.status}, ${errorText.substring(0, 200)}`
+        details: `Status: ${response.status}, ${errorText.substring(0, 500)}`
       });
     }
 
